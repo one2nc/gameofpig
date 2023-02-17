@@ -20,25 +20,31 @@ var rootCmd = &cobra.Command{
 			return
 		}
 
-		p1, err := strconv.Atoi(args[0])
-		if err != nil || p1 < 1 || p1 > 100 {
-			fmt.Println("Expect the strategy between 1 and 100")
+		p1, p2 := args[0], args[1]
+		if strings.Contains(p1, "-") && strings.Contains(p2, "-") {
+			playMultiStrategyWithMultiStrategy(p1, p2)
 			return
 		}
 
-		p2 := args[1]
+		p1HoldScore, err := strconv.Atoi(p1)
+		if err != nil || p1HoldScore < 1 || p1HoldScore > 100 {
+			fmt.Println("expect the strategy between 1 and 100")
+			return
+		}
+
 		if strings.Contains(p2, "-") {
-			story2(p1, p2)
+			playSingleStrategyWithMultiStrategy(p1HoldScore, p2)
 			return
 		}
 
 		p2HoldScore, err := strconv.Atoi(p2)
 		if err != nil || p2HoldScore < 1 || p2HoldScore > 100 {
-			fmt.Println("Expect the strategy between 1 and 100")
+			fmt.Println("expect the strategy between 1 and 100")
 			return
 		}
 
-		fmt.Println(story1(p1, p2HoldScore))
+		p1Wins, gamesPlayed := play(p1HoldScore, p2HoldScore)
+		printRatio1(p1HoldScore, p2HoldScore, p1Wins, gamesPlayed)
 	},
 }
 
@@ -81,7 +87,7 @@ var numberOfGames = 10
 // Story 1
 // Player 1 uses a strategy of always holding after accumulating a score of at least 10,
 // while Player 2 uses a strategy of always holding after reaching a sum of at least 15.
-func story1(p1HoldScore, p2HoldScore int) string {
+func play(p1HoldScore, p2HoldScore int) (int, int) {
 	player1 := domain.Player{
 		Name:      "player1",
 		HoldScore: int8(p1HoldScore),
@@ -118,33 +124,16 @@ func story1(p1HoldScore, p2HoldScore int) string {
 		wins[p.Name]++
 	}
 
-	return printRatio(player1, player2, wins)
+	return wins[player1.Name], numberOfGames
 }
 
 // Story 2
 // Player 1 has a fixed strategy of always holding after accumulating a score of at least 21.
 // Player 2 changes their strategy for each set of games between 1 to 100:
-func story2(p1HoldScore int, p2HoldScore string) {
-	p2HoldScoreRange := strings.Split(p2HoldScore, "-")
-	if len(p2HoldScoreRange) > 2 {
-		fmt.Println("Expect the strategy in range format e.g. 1-100")
-		return
-	}
-
-	p2Start, err := strconv.Atoi(p2HoldScoreRange[0])
-	if err != nil || p2Start < 1 || p2Start > 100 {
-		fmt.Println("Expect the strategy between 1 and 100")
-		return
-	}
-
-	p2End, err := strconv.Atoi(p2HoldScoreRange[1])
-	if err != nil || p2End < 1 || p2End > 100 {
-		fmt.Println("Expect the strategy between 1 and 100")
-		return
-	}
-
-	if p2Start >= p2End {
-		fmt.Println("Invalid strategy range")
+func playSingleStrategyWithMultiStrategy(p1HoldScore int, p2HoldScore string) {
+	p2Start, p2End, err := extractRange(p2HoldScore)
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
 
@@ -153,17 +142,52 @@ func story2(p1HoldScore int, p2HoldScore string) {
 			continue
 		}
 
-		fmt.Println(story1(p1HoldScore, p2HoldScore))
+		p1Wins, gamesPlayed := play(p1HoldScore, p2HoldScore)
+		printRatio1(p1HoldScore, p2HoldScore, p1Wins, gamesPlayed)
 	}
 }
 
-func printRatio(p1, p2 domain.Player, wins map[string]int) string {
-	p1Wins := wins[p1.Name]
+// Story 3
+// This story is an extension of previous story, where both players change their strategies. In story 2, Player 1 had fixed strategy and Player 2 used different strategies. In this story, let's allow both players to change their strategies.
+
+// Thus, there will be 100 strategies for Player 1 (from "hold until 1" to "hold until 100") and 99 strategies for Player 2. Each of these strategies will be played against each other in a match. Each such match will have 10 games. Thus, there will be 99,000 games (100 strategies * 99 strategies * 10 games per match) in total.
+
+// Now, instead of printing 9900 output lines (as per Story 2's logic), let's do something different. Let's calculate the probability of win rates for strategies and print that.
+func playMultiStrategyWithMultiStrategy(p1HoldScore, p2HoldScore string) {
+	p1Start, p1End, err := extractRange(p1HoldScore)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	p2Start, p2End, err := extractRange(p2HoldScore)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	for p1HoldScore := p1Start; p1HoldScore <= p1End; p1HoldScore++ {
+		p1WinsTotal := 0
+		gamesPlayedTotal := 0
+		for p2HoldScore := p2Start; p2HoldScore <= p2End; p2HoldScore++ {
+			if p1HoldScore == p2HoldScore {
+				continue
+			}
+
+			p1Wins, gamesPlayed := play(p1HoldScore, p2HoldScore)
+			p1WinsTotal += p1Wins
+			gamesPlayedTotal += gamesPlayed
+		}
+		printRatio2(p1HoldScore, p1WinsTotal, gamesPlayedTotal)
+	}
+}
+
+func printRatio1(p1HoldScore, p2HoldScore, p1Wins, numberOfGames int) {
 	p1WinsPer := 100 * float64(p1Wins) / float64(numberOfGames)
-	return fmt.Sprintf(
-		"Result: Holding at %4d vs Holding at %4d: wins: %d/%d (%0.1f%%), losses: %d/%d (%0.1f%%)",
-		p1.HoldScore,
-		p2.HoldScore,
+	fmt.Printf(
+		"Result: Holding at %4d vs Holding at %4d: wins: %d/%d (%0.1f%%), losses: %d/%d (%0.1f%%)\n",
+		p1HoldScore,
+		p2HoldScore,
 		p1Wins,
 		numberOfGames,
 		p1WinsPer,
@@ -171,4 +195,41 @@ func printRatio(p1, p2 domain.Player, wins map[string]int) string {
 		numberOfGames,
 		100-p1WinsPer,
 	)
+}
+
+func printRatio2(p1HoldScore, p1Wins, numberOfGames int) {
+	p1WinsPer := 100 * float64(p1Wins) / float64(numberOfGames)
+	fmt.Printf(
+		"Result: Wins, losses staying at k = %4d: %d/%d (%0.1f%%), %d/%d (%0.1f%%)\n",
+		p1HoldScore,
+		p1Wins,
+		numberOfGames,
+		p1WinsPer,
+		numberOfGames-p1Wins,
+		numberOfGames,
+		100-p1WinsPer,
+	)
+}
+
+func extractRange(strategyRange string) (int, int, error) {
+	ranngeArr := strings.Split(strategyRange, "-")
+	if len(ranngeArr) > 2 {
+		return 0, 0, fmt.Errorf("expect the strategy in range format e.g. 1-100")
+	}
+
+	start, err := strconv.Atoi(ranngeArr[0])
+	if err != nil || start < 1 || start > 100 {
+		return 0, 0, fmt.Errorf("expect the strategy between 1 and 100")
+	}
+
+	end, err := strconv.Atoi(ranngeArr[1])
+	if err != nil || end < 1 || end > 100 {
+		return 0, 0, fmt.Errorf("expect the strategy between 1 and 100")
+	}
+
+	if start >= end {
+		return 0, 0, fmt.Errorf("invalid strategy range")
+	}
+
+	return start, end, nil
 }
