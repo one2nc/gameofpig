@@ -5,6 +5,7 @@ import (
 	"gameofpig/domain"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -26,14 +27,38 @@ var rootCmd = &cobra.Command{
 		}
 		p1HoldScore := int8(p1)
 
-		p2, err := strconv.Atoi(args[1])
-		if err != nil || p2 < 1 || p2 > 100 {
+		p2 := args[1]
+		p2HoldScoreRange := strings.Split(p2, "-")
+		if len(p2HoldScoreRange) > 2 {
+			fmt.Println("Expect the strategy in range format e.g. 1-100")
+			return
+		}
+
+		if len(p2HoldScoreRange) == 1 {
+			p2HoldScore, err := strconv.Atoi(p2)
+			if err != nil || p2HoldScore < 1 || p2HoldScore > 100 {
+				fmt.Println("Expect the strategy between 1 and 100")
+				return
+			}
+
+			story1(p1HoldScore, int8(p2HoldScore))
+			return
+		}
+
+		p2Start, err := strconv.Atoi(p2HoldScoreRange[0])
+		if err != nil || p2Start < 1 || p2Start > 100 {
 			fmt.Println("Expect the strategy between 1 and 100")
 			return
 		}
-		p2HoldScore := int8(p2)
 
-		run(p1HoldScore, p2HoldScore)
+		p2End, err := strconv.Atoi(p2HoldScoreRange[1])
+		if err != nil || p2End < 1 || p2End > 100 {
+			fmt.Println("Expect the strategy between 1 and 100")
+			return
+		}
+
+		story2(p1HoldScore, int8(p2Start), int8(p2End))
+
 	},
 }
 
@@ -76,7 +101,7 @@ var numberOfGames = 10
 // Story 1
 // Player 1 uses a strategy of always holding after accumulating a score of at least 10,
 // while Player 2 uses a strategy of always holding after reaching a sum of at least 15.
-func run(p1HoldScore, p2HoldScore int8) {
+func story1(p1HoldScore, p2HoldScore int8) {
 	player1 := domain.Player{
 		Name:      "player1",
 		HoldScore: p1HoldScore,
@@ -114,6 +139,19 @@ func run(p1HoldScore, p2HoldScore int8) {
 	}
 
 	printRatio(player1, player2, wins)
+}
+
+// Story 2
+// Player 1 has a fixed strategy of always holding after accumulating a score of at least 21.
+// Player 2 changes their strategy for each set of games between 1 to 100:
+func story2(p1HoldScore, p2HoldScoreStart, p2HoldScoreEnd int8) {
+	for p2HoldScore := p2HoldScoreStart; p2HoldScore <= p2HoldScoreEnd; p2HoldScore++ {
+		if p2HoldScore == p1HoldScore {
+			continue
+		}
+
+		story1(p1HoldScore, p2HoldScore)
+	}
 }
 
 func printRatio(p1, p2 domain.Player, wins map[string]int) {
